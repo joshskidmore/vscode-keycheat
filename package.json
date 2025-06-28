@@ -1,7 +1,7 @@
 {
   "name": "keycheat",
   "displayName": "keycheat",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Instantly search your custom keybindings",
   "categories": [
     "Keymaps",
@@ -21,7 +21,8 @@
     "vscode:prepublish": "npm run package",
     "watch": "npm-run-all -p watch:*",
     "watch:esbuild": "node esbuild.js --watch",
-    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json"
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package:vsix": "npm run compile; npx vsce package"
   },
   "contributes": {
     "commands": [

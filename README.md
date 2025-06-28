@@ -11,6 +11,7 @@ Keycheat is your personal command cheat sheet for VS Code. Hit a shortcut, get a
 - **Search Everything:** Fuzzy-search all your custom keybindings (and Vim bindings if you use them)
 - **Recent Commands:** Remembers what you use most and floats them to the top
 - **Works with VSCodeVim:** Shows your Vim mode custom bindings too
+- **Custom Labels:** Optionally add a `label` property to your keybindings or Vim bindings for descriptive names—these will be shown in the Keycheat picker.
 - **Zero Setup:** Just install and go. It reads your existing keybindings and settings.
 - **Cross-Platform:** Mac, Windows, Linux—no worries
 
@@ -21,6 +22,7 @@ Keycheat is your personal command cheat sheet for VS Code. Hit a shortcut, get a
    - Press `Ctrl+Alt+K` (or use the Command Palette: `Keycheat: Show Key Bindings`)
 2. **Search**
    - Start typing to filter through your keybindings
+   - If a keybinding or Vim binding has a `label` property, it will be shown before the command name for easier identification.
 3. **Hit Enter**
    - Run the command instantly!
 
@@ -29,6 +31,34 @@ Keycheat adds a couple of settings (totally optional):
 
 - `keycheat.rememberRecent` (default: `true`):
   - Remembers your recently used commands and shows them first
+
+## Example: Using the `label` Property
+
+You can add a `label` to your keybindings or Vim bindings for a more descriptive display in Keycheat.
+
+**VSCode Keybindings Example (`keybindings.json`):**
+```json
+{
+  "key": "ctrl+shift+p",
+  "command": "workbench.action.showCommands",
+  "label": "Show Command Palette"
+}
+```
+
+**VSCodeVim Example (`settings.json`):**
+```json
+{
+  "vim.normalModeKeyBindingsNonRecursive": [
+    {
+      "before": ["space", "f"],
+      "commands": ["workbench.action.quickOpen"],
+      "label": "Quick File Open"
+    }
+  ]
+}
+```
+
+The `label` will appear alongside the keybinding in the Keycheat picker, making it easier to recognize your custom shortcuts!
 
 ## Pro Tips
 

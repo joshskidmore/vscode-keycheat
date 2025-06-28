@@ -7,6 +7,8 @@ import * as vscode from 'vscode';
 const RECENT_KEY = 'keycheat.recentCommands';
 const MAX_RECENT = 15;
 
+type KeycheatItem = vscode.QuickPickItem & { cmdId?: string };
+
 export function activate(context: vscode.ExtensionContext): void {
   const disposable = vscode.commands.registerCommand('keycheat.show', async () => {
     try {
@@ -19,10 +21,10 @@ export function activate(context: vscode.ExtensionContext): void {
       const keybindings = parse(keybindingsRaw);
       const settings = parse(settingsRaw);
 
-      let items: vscode.QuickPickItem[] = [
+      let items: KeycheatItem[] = [
         ...parseVSCodeKeybindings(keybindings),
-        ...parseVimKeybindings(settings, 'vim.normalModeKeyBindings',            'Normal'),
-        ...parseVimKeybindings(settings, 'vim.normalModeKeyBindingsNonRecursive','Normal (Non-Recursive)'),
+        ...parseVimKeybindings({ settings, key: 'vim.normalModeKeyBindings', modeLabel: 'vim: normal' }),
+        ...parseVimKeybindings({ settings, key: 'vim.normalModeKeyBindingsNonRecursive', modeLabel: 'vim: normal (non-recursive)' }),
       ];
 
       let recent: string[] = [];
@@ -32,10 +34,8 @@ export function activate(context: vscode.ExtensionContext): void {
       }
 
       items.sort((a, b) => {
-        const aCmd = extractCommandId(a.label);
-        const bCmd = extractCommandId(b.label);
-        const aIdx = recent.indexOf(aCmd);
-        const bIdx = recent.indexOf(bCmd);
+        const aIdx = recent.indexOf(a.cmdId || '');
+        const bIdx = recent.indexOf(b.cmdId || '');
 
         if (aIdx !== -1 || bIdx !== -1) {
           return (aIdx !== -1 ? aIdx : MAX_RECENT) - (bIdx !== -1 ? bIdx : MAX_RECENT);
@@ -45,13 +45,13 @@ export function activate(context: vscode.ExtensionContext): void {
       });
 
       const selected = await vscode.window.showQuickPick(items, {
-        placeHolder: 'Search your keybindings…',
+        placeHolder: 'Keycheat: Search your keys…',
         matchOnDescription: true,
-        matchOnDetail:      true,
+        matchOnDetail: true
       });
 
       if (selected) {
-        const cmdId = extractCommandId(selected.label);
+        const cmdId = selected.cmdId;
 
         if (rememberRecent && cmdId) {
           const updated = [cmdId, ...recent.filter(id => id !== cmdId)].slice(0, MAX_RECENT);
@@ -80,14 +80,6 @@ export function activate(context: vscode.ExtensionContext): void {
 
 export function deactivate(): void {}
 
-
-
-/**
- * Gets the path to the user directory for the current platform
- * 
- * @param filename The filename to get the path for
- * @returns The path to the user directory
- */
 const getUserPath = (filename: string): string => {
   const home    = os.homedir();
   const isWin   = process.platform === 'win32';
@@ -101,7 +93,6 @@ const getUserPath = (filename: string): string => {
 
   if (isWin) {
     const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
-
     return path.join(appData, codeName, 'User', filename);
   }
 
@@ -118,22 +109,26 @@ interface VSCodeKeybinding {
   when?: string;
 }
 
-/**
- * Parses VSCode keybindings into QuickPickItems
- * 
- * @param data The data to parse
- * @returns The parsed keybindings
- */
-const parseVSCodeKeybindings = (data: unknown): vscode.QuickPickItem[] => {
+const parseVSCodeKeybindings = (data: unknown): KeycheatItem[] => {
   const arr = Array.isArray(data) ? data as VSCodeKeybinding[] : [];
 
   return arr
     .filter((e): e is VSCodeKeybinding => typeof e.key === 'string' && typeof e.command === 'string')
-    .map(e => ({
-      label: `${formatKeyLabel(e.key)} – ${e.command}`,
-      description: '',
-      detail: e.when ? `when: ${e.when}` : '',
-    }));
+    .filter((e) => !e.command.startsWith('-'))
+    .map(e => {
+      const keyLabel = padRight(formatKeyLabel(e.key), 15);
+      const cmd = e.command;
+      const userLabel = (e as any).label as string | undefined;
+      const detail = e.when ? `when: ${e.when}` : '';
+
+      return {
+        label: keyLabel,
+        description: userLabel ? `${userLabel} - ${cmd}` : cmd,
+        detail,
+        iconPath: new vscode.ThemeIcon('keyboard'),
+        cmdId: cmd
+      };
+    });
 };
 
 interface VimKeybindingEntry {
@@ -141,108 +136,99 @@ interface VimKeybindingEntry {
   commands: string[];
 }
 
-/**
- * Parses Vim keybindings into QuickPickItems
- * 
- * @param settings The settings to parse
- * @param key The key to parse
- * @param modeLabel The mode label to use
- * @returns The parsed keybindings
- */
-const parseVimKeybindings = (settings: Record<string, unknown>, key: string, modeLabel: string): vscode.QuickPickItem[] => {
-  const entries = Array.isArray(settings[key]) ? settings[key] as VimKeybindingEntry[] : [];
-  const filterFn = (entry: VimKeybindingEntry): entry is VimKeybindingEntry => {
-    const hasValidBefore = Array.isArray(entry.before);
-    const hasValidCommands = Array.isArray(entry.commands);
+interface VimKeybindingsParams {
+  settings: Record<string, unknown>,
+  key: string,
+  modeLabel: string
+}
 
-    return hasValidBefore && hasValidCommands;
-  };
-  const mapFn = (entry: VimKeybindingEntry) => ({
-      label: `${formatKeyLabel(entry.before.join(' '))} – ${entry.commands.join(', ')}`,
-      description: `vim: ${modeLabel}`,
-      detail: ''
-  });
+const parseVimKeybindings = (parms: VimKeybindingsParams): KeycheatItem[] => {
+  const { settings, key, modeLabel } = parms;
+  const entries = Array.isArray(settings[key]) ? settings[key] as VimKeybindingEntry[] : [];
 
   return entries
-    .filter(filterFn)
-    .map(mapFn);
+    .filter(entry => Array.isArray(entry.before) && Array.isArray(entry.commands))
+    .map(entry => {
+      const keyLabel = padRight(formatKeyLabel(entry.before.join(' ')), 8);
+      const commandLabel = entry.commands.join(', ');
+      const userLabel = (entry as any).label as string | undefined;
+      const detail = modeLabel;
+
+      return {
+        label: keyLabel,
+        description: userLabel ? `${userLabel} - ${commandLabel}` : commandLabel,
+        detail,
+        iconPath: new vscode.ThemeIcon('chevron-right'),
+        cmdId: entry.commands[0]
+      };
+    });
 };
 
-/**
- * Extracts the command ID from a keybinding label
- * 
- * @param label The keybinding label to extract the command ID from
- * @returns The command ID from the keybinding label
- */
-const extractCommandId = (label: string): string => {
-  return label.split('–')[1]?.trim() || '';
-};
-
-/**
- * Extracts the group from a keybinding label
- * 
- * @param label The keybinding label to extract the group from
- * @returns The group from the keybinding label
- */
 const groupFromKey = (label: string): string => {
-  const raw = label.split('–')[0].trim();
+  const raw = label.trim();
 
-  if (raw.startsWith('<space>')) {
-    return '<space>';
-  }
-
-  if (raw.startsWith('Ctrl')) {
-    return 'Ctrl';
-  }
-
-  if (raw.startsWith('g')) {
-    return 'g';
-  }
+  if (raw.startsWith('<space>')) return '<space>';
+  if (raw.startsWith('Ctrl')) return 'Ctrl';
+  if (raw.startsWith('g')) return 'g';
 
   return raw.split(' ')[0];
 };
 
-/**
- * Formats a raw keybinding string into a human-readable format
- * 
- * @param raw The raw keybinding string to format.
- * @returns The formatted keybinding string.
- */
+const padRight = (str: string, minLen: number): string => {
+  const extra = str.length >= minLen ? 2 : minLen - str.length;
+  return str + ' '.repeat(extra);
+};
+
 const formatKeyLabel = (raw: string): string => {
-  return raw.split(' ')
+  const label = raw.split(' ')
     .map(k => {
-      if (k === 'space') {
-        return '<space>';
-      }
-
-      if (k.startsWith('space+')) {
-        return '<space>' + prettyKey(k.slice(6));
-      }
-
+      if (k === 'space') return '<space>';
+      if (k.startsWith('space+')) return '<space> ' + prettyKey(k.slice(6));
       return prettyKey(k);
     })
     .join(' ');
+
+  return ` ${label}`;
 };
 
-/**
- * Formats a raw keybinding string into a human-readable format
- * 
- * @param k The raw keybinding string to format.
- * @returns The formatted keybinding string.
- */
+const shiftedSymbols: Record<string, string> = {
+  '1': '!',
+  '2': '@',
+  '3': '#',
+  '4': '$',
+  '5': '%',
+  '6': '^',
+  '7': '&',
+  '8': '*',
+  '9': '(',
+  '0': ')',
+  '`': '~',
+  '-': '_',
+  '=': '+',
+  '[': '{',
+  ']': '}',
+  '\\': '|',   // ← fixed this line
+  ';': ':',
+  "'": '"',
+  ',': '<',
+  '.': '>',
+  '/': '?'
+};
+
 const prettyKey = (k: string): string => {
   if (k.startsWith('shift+')) {
     const char = k.slice(6);
-
-    if (/^[a-z]$/.test(char)) {
-      return char.toUpperCase();
-    }
+    if (/^[a-z]$/.test(char)) return char.toUpperCase();
+    if (shiftedSymbols[char]) return shiftedSymbols[char];
+    return char;
   }
 
   if (k.startsWith('ctrl+')) {
     const char = k.slice(5);
-
-    return `Ctrl+${char.length === 1 ? char.toUpperCase() : char}`;
+    const displayChar = shiftedSymbols[char] || char;
+    return `<ctrl+${displayChar}>`;
+  } else if (k.toLowerCase().match('ctrl|alt|shift|meta')) {
+    return `<${k}>`;
   }
 
   return k;
