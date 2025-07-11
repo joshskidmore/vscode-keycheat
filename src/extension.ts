@@ -104,6 +104,8 @@ const getUserPath = (filename: string): string => {
 };
 
 interface VSCodeKeybinding {
+  label?: string;
+  hidden?: boolean;
   key: string;
   command: string;
   when?: string;
@@ -115,6 +117,7 @@ const parseVSCodeKeybindings = (data: unknown): KeycheatItem[] => {
   return arr
     .filter((e): e is VSCodeKeybinding => typeof e.key === 'string' && typeof e.command === 'string')
     .filter((e) => !e.command.startsWith('-'))
+    .filter((e) => !e.hidden)
     .map(e => {
       const keyLabel = padRight(formatKeyLabel(e.key), 15);
       const cmd = e.command;
@@ -132,6 +135,8 @@ const parseVSCodeKeybindings = (data: unknown): KeycheatItem[] => {
 };
 
 interface VimKeybindingEntry {
+  label?: string;
+  hidden?: boolean;
   before: string[];
   commands: string[];
 }
@@ -147,7 +152,8 @@ const parseVimKeybindings = (parms: VimKeybindingsParams): KeycheatItem[] => {
   const entries = Array.isArray(settings[key]) ? settings[key] as VimKeybindingEntry[] : [];
 
   return entries
-    .filter(entry => Array.isArray(entry.before) && Array.isArray(entry.commands))
+    .filter((entry): entry is VimKeybindingEntry => Array.isArray(entry.before) && Array.isArray(entry.commands))
+    .filter((entry) => !entry.hidden)
     .map(entry => {
       const keyLabel = padRight(formatKeyLabel(entry.before.join(' ')), 8);
       const commandLabel = entry.commands.join(', ');
