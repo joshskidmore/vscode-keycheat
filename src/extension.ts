@@ -87,6 +87,7 @@ const getUserPath = (filename: string): string => {
 
   const codeName = appName.includes('Cursor') ? 'Cursor'
                   : appName.includes('Windsurf') ? 'Windsurf'
+                  : appName.includes('Devin') ? 'Devin'
                   : appName.includes('Insiders') ? 'Code - Insiders'
                   : appName.includes('VSCodium') ? 'VSCodium'
                   : 'Code';
@@ -231,8 +232,7 @@ const prettyKey = (k: string): string => {
 
   if (k.startsWith('ctrl+')) {
     const char = k.slice(5);
-    const displayChar = shiftedSymbols[char] || char;
-    return `<ctrl+${displayChar}>`;
+    return `<ctrl+${char}>`;
   } else if (k.toLowerCase().match('ctrl|alt|shift|meta')) {
     return `<${k}>`;
   }
